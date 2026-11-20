@@ -1,43 +1,60 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChoicePad } from "@/components/game/choice-pad";
 import { Keypad } from "@/components/game/keypad";
 import { MascotScene } from "@/components/game/mascot-scene";
 import { MuteButton } from "@/components/game/mute-button";
 import { Button } from "@/components/ui/button";
+import { choiceAnswers } from "@/lib/choices";
 import { nextProblem, type Problem } from "@/lib/problems";
 import { nudge, playCorrect, playNewBest, playWrong } from "@/lib/sound";
-import type { MaxFactor, RoundSeconds } from "@/lib/settings";
+import type { AnswerMode, MaxFactor, RoundSeconds } from "@/lib/settings";
 import { themes, type ThemeId } from "@/lib/theme";
 
 type PlayScreenProps = {
   theme: ThemeId;
   maxFactor: MaxFactor;
   seconds: RoundSeconds;
+  answerMode: AnswerMode;
   best: number | null;
   muted: boolean;
   onToggleMute: () => void;
   onFinish: (result: { correct: number; tries: number }) => void;
 };
 
+function dealProblem(maxFactor: number, previous: Problem | null, answerMode: AnswerMode) {
+  const problem = nextProblem(maxFactor, previous);
+  return {
+    problem,
+    options: answerMode === "choices" ? choiceAnswers(problem) : [],
+  };
+}
+
 export function PlayScreen({
   theme,
   maxFactor,
   seconds,
+  answerMode,
   best,
   muted,
   onToggleMute,
   onFinish,
 }: PlayScreenProps) {
   const [remainingMs, setRemainingMs] = useState(seconds * 1000);
-  const [problem, setProblem] = useState<Problem>(() => nextProblem(maxFactor, null));
+  const [deal, setDeal] = useState(() => dealProblem(maxFactor, null, answerMode));
+  const [wrong, setWrong] = useState<number[]>([]);
   const [entry, setEntry] = useState("");
   const [correct, setCorrect] = useState(0);
   const [streak, setStreak] = useState(0);
   const [shaking, setShaking] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
   const [popKey, setPopKey] = useState(0);
-  const [feedback, setFeedback] = useState("Type the answer, then tap Go.");
+  const [feedback, setFeedback] = useState(
+    answerMode === "choices" ? "Tap the right answer." : "Type the answer, then tap Go.",
+  );
+  const problem = deal.problem;
+  const options = deal.options;
   const [newBestOn, setNewBestOn] = useState(false);
   const endRef = useRef<number | null>(null);
   const finishedRef = useRef(false);
@@ -46,6 +63,8 @@ export function PlayScreen({
   const bestRef = useRef(best);
   const entryRef = useRef("");
   const problemRef = useRef(problem);
+  const optionsRef = useRef(options);
+  const wrongRef = useRef<number[]>([]);
 
   useEffect(() => {
     bestRef.current = best;
@@ -57,7 +76,41 @@ export function PlayScreen({
 
   useEffect(() => {
     problemRef.current = problem;
-  }, [problem]);
+    optionsRef.current = options;
+  }, [options, problem]);
+
+  const advance = useCallback(
+    (previous: Problem) => {
+      wrongRef.current = [];
+      setWrong([]);
+      setEntry("");
+      setDeal(dealProblem(maxFactor, previous, answerMode));
+    },
+    [answerMode, maxFactor],
+  );
+
+  const markCorrect = useCallback(
+    (currentProblem: Problem) => {
+      const previousScore = correctRef.current;
+      const next = previousScore + 1;
+      correctRef.current = next;
+      setCorrect(next);
+      setStreak((count) => count + 1);
+      const target = bestRef.current;
+      if (target !== null && previousScore <= target && next > target) {
+        setNewBestOn(true);
+        playNewBest(theme);
+      } else {
+        playCorrect(theme);
+      }
+      nudge();
+      setFeedback(`${themes[theme].cheer} That's right.`);
+      setPopKey((key) => key + 1);
+      setShaking(false);
+      advance(currentProblem);
+    },
+    [advance, theme],
+  );
 
   const finish = useCallback(() => {
     if (finishedRef.current) {
@@ -125,24 +178,7 @@ export function PlayScreen({
     const currentProblem = problemRef.current;
 
     if (value === currentProblem.answer) {
-      const previousScore = correctRef.current;
-      const next = previousScore + 1;
-      correctRef.current = next;
-      setCorrect(next);
-      setStreak((count) => count + 1);
-      const target = bestRef.current;
-      if (target !== null && previousScore <= target && next > target) {
-        setNewBestOn(true);
-        playNewBest(theme);
-      } else {
-        playCorrect(theme);
-      }
-      nudge();
-      setFeedback(`${themes[theme].cheer} That's right.`);
-      setPopKey((key) => key + 1);
-      setShaking(false);
-      setProblem(nextProblem(maxFactor, currentProblem));
-      setEntry("");
+      markCorrect(currentProblem);
       return;
     }
 
@@ -151,7 +187,32 @@ export function PlayScreen({
     setShakeKey((key) => key + 1);
     setFeedback("Not quite — try again.");
     playWrong();
-  }, [maxFactor, theme]);
+  }, [markCorrect]);
+
+  const choose = useCallback(
+    (value: number) => {
+      if (finishedRef.current || (endRef.current ?? 0) <= Date.now()) {
+        return;
+      }
+      if (wrongRef.current.includes(value)) {
+        return;
+      }
+      const currentProblem = problemRef.current;
+      triesRef.current += 1;
+      if (value === currentProblem.answer) {
+        markCorrect(currentProblem);
+        return;
+      }
+      wrongRef.current = [...wrongRef.current, value];
+      setWrong(wrongRef.current);
+      setStreak(0);
+      setShaking(true);
+      setShakeKey((key) => key + 1);
+      setFeedback("Not quite — try another.");
+      playWrong();
+    },
+    [markCorrect],
+  );
 
   const skip = useCallback(() => {
     if (finishedRef.current) {
@@ -161,13 +222,22 @@ export function PlayScreen({
     setStreak(0);
     setFeedback("Skipped.");
     setShaking(false);
-    setEntry("");
-    setProblem((current) => nextProblem(maxFactor, current));
-  }, [maxFactor]);
+    advance(problemRef.current);
+  }, [advance]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (answerMode === "choices") {
+        if (/^[1-5]$/.test(event.key)) {
+          event.preventDefault();
+          const picked = optionsRef.current[Number(event.key) - 1];
+          if (picked !== undefined) {
+            choose(picked);
+          }
+        }
         return;
       }
       if (/^[0-9]$/.test(event.key)) {
@@ -187,7 +257,7 @@ export function PlayScreen({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pushDigit, submit]);
+  }, [answerMode, choose, pushDigit, submit]);
 
   const secondsLeft = Math.ceil(remainingMs / 1000);
   const totalMs = seconds * 1000;
@@ -241,9 +311,11 @@ export function PlayScreen({
             <p className="play-problem dash-title text-5xl whitespace-nowrap sm:text-7xl">
               {problem.a} × {problem.b}
             </p>
-            <p className="mt-2 min-h-10 text-3xl font-bold tabular-nums" aria-label="Your answer">
-              {entry === "" ? "—" : entry}
-            </p>
+            {answerMode === "pad" ? (
+              <p className="mt-2 min-h-10 text-3xl font-bold tabular-nums" aria-label="Your answer">
+                {entry === "" ? "—" : entry}
+              </p>
+            ) : null}
             <p className="min-h-6 text-base font-bold text-[var(--ink-soft)]">
               {streak >= 2 ? `${streak} in a row` : ""}
             </p>
@@ -251,7 +323,11 @@ export function PlayScreen({
         </section>
 
         <section className="play-keys flex w-full flex-col gap-2">
-          <Keypad onDigit={pushDigit} onClear={clearEntry} onGo={submit} canGo={entry !== ""} />
+          {answerMode === "choices" ? (
+            <ChoicePad options={options} wrong={wrong} onChoose={choose} />
+          ) : (
+            <Keypad onDigit={pushDigit} onClear={clearEntry} onGo={submit} canGo={entry !== ""} />
+          )}
           <Button type="button" variant="outline" size="touch" onClick={skip}>
             Skip
           </Button>

@@ -1,4 +1,11 @@
-import { isMaxFactor, isRoundSeconds, type MaxFactor, type RoundSeconds } from "@/lib/settings";
+import {
+  isAnswerMode,
+  isMaxFactor,
+  isRoundSeconds,
+  type AnswerMode,
+  type MaxFactor,
+  type RoundSeconds,
+} from "@/lib/settings";
 import { isThemeId, type ThemeId } from "@/lib/theme";
 
 const PREFS_KEY = "dino-dragon-dash-prefs";
@@ -8,10 +15,11 @@ export type Prefs = {
   maxFactor: MaxFactor;
   seconds: RoundSeconds;
   muted: boolean;
+  answerMode: AnswerMode;
 };
 
 function defaults(): Prefs {
-  return { theme: "dinosaur", maxFactor: 10, seconds: 60, muted: false };
+  return { theme: "dinosaur", maxFactor: 10, seconds: 60, muted: false, answerMode: "pad" };
 }
 
 export function readPrefs(): Partial<Prefs> | null {
@@ -40,6 +48,9 @@ export function readPrefs(): Partial<Prefs> | null {
     }
     if (typeof record.muted === "boolean") {
       prefs.muted = record.muted;
+    }
+    if (isAnswerMode(record.answerMode)) {
+      prefs.answerMode = record.answerMode;
     }
     return prefs;
   } catch {

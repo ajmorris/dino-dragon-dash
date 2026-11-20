@@ -1,7 +1,7 @@
 import { readPrefs, writePrefs } from "@/lib/prefs";
 import { storageAvailable } from "@/lib/scores";
 import { setSoundMuted } from "@/lib/sound";
-import type { MaxFactor, RoundSeconds } from "@/lib/settings";
+import type { AnswerMode, MaxFactor, RoundSeconds } from "@/lib/settings";
 import type { ThemeId } from "@/lib/theme";
 
 export type ClientState = {
@@ -9,6 +9,7 @@ export type ClientState = {
   maxFactor: MaxFactor;
   seconds: RoundSeconds;
   muted: boolean;
+  answerMode: AnswerMode;
   blocked: boolean;
 };
 
@@ -25,6 +26,7 @@ export function readClientState(): ClientState {
     maxFactor: prefs?.maxFactor ?? 10,
     seconds: prefs?.seconds ?? 60,
     muted: prefs?.muted ?? false,
+    answerMode: prefs?.answerMode ?? "pad",
     blocked,
   };
   setSoundMuted(cache.muted);
@@ -41,6 +43,7 @@ export function patchClientState(patch: Partial<ClientState>): ClientState {
       maxFactor: next.maxFactor,
       seconds: next.seconds,
       muted: next.muted,
+      answerMode: next.answerMode,
     });
   }
   return next;

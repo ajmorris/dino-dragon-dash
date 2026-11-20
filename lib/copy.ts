@@ -26,9 +26,16 @@ export function goalLine(
   best: number | null,
   seconds: number,
   storageBlocked: boolean,
+  answerMode: "pad" | "choices" = "pad",
 ): string {
   if (storageBlocked) {
     return "Scores will not be remembered on this device.";
+  }
+  if (answerMode === "choices") {
+    if (best === null) {
+      return "No score yet for 5 choices — set one to beat.";
+    }
+    return `Best with 5 choices: ${best} correct in ${seconds} seconds.`;
   }
   if (best === null) {
     return "No score yet — set one to beat.";

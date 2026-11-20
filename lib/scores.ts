@@ -1,3 +1,4 @@
+import type { AnswerMode } from "@/lib/settings";
 import type { ThemeId } from "@/lib/theme";
 
 const BESTS_KEY = "dino-dragon-dash-bests";
@@ -7,8 +8,14 @@ export type BestRecord = {
   at: string;
 };
 
-export function bestKey(theme: ThemeId, maxFactor: number, seconds: number): string {
-  return `${theme}-${maxFactor}-${seconds}`;
+export function bestKey(
+  theme: ThemeId,
+  maxFactor: number,
+  seconds: number,
+  mode: AnswerMode,
+): string {
+  const base = `${theme}-${maxFactor}-${seconds}`;
+  return mode === "choices" ? `${base}-choices` : base;
 }
 
 export function storageAvailable(): boolean {
@@ -59,8 +66,13 @@ function readAll(): Record<string, BestRecord> {
   }
 }
 
-export function readBest(theme: ThemeId, maxFactor: number, seconds: number): number | null {
-  const record = readAll()[bestKey(theme, maxFactor, seconds)];
+export function readBest(
+  theme: ThemeId,
+  maxFactor: number,
+  seconds: number,
+  mode: AnswerMode,
+): number | null {
+  const record = readAll()[bestKey(theme, maxFactor, seconds, mode)];
   return record ? record.correct : null;
 }
 
@@ -68,6 +80,7 @@ export function writeBest(
   theme: ThemeId,
   maxFactor: number,
   seconds: number,
+  mode: AnswerMode,
   correct: number,
 ): { best: number; improved: boolean; blocked: boolean } {
   if (!storageAvailable()) {
@@ -75,7 +88,7 @@ export function writeBest(
   }
 
   const all = readAll();
-  const key = bestKey(theme, maxFactor, seconds);
+  const key = bestKey(theme, maxFactor, seconds, mode);
   const previous = all[key]?.correct;
 
   if (previous === undefined || correct > previous) {

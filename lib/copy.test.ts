@@ -19,6 +19,8 @@ describe("goal and start copy", () => {
   it("names the timed best the child is chasing", () => {
     assert.equal(goalLine(null, 60, false), "No score yet — set one to beat.");
     assert.equal(goalLine(14, 60, false), "Best: 14 correct in 60 seconds.");
+    assert.equal(goalLine(null, 60, false, "choices"), "No score yet for 5 choices — set one to beat.");
+    assert.equal(goalLine(9, 30, false, "choices"), "Best with 5 choices: 9 correct in 30 seconds.");
     assert.equal(startLabel(null), "Set a score");
     assert.equal(startLabel(14), "Beat 14");
   });

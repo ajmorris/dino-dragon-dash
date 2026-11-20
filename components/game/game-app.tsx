@@ -8,7 +8,7 @@ import { ThemePicker } from "@/components/game/theme-picker";
 import { patchClientState, readClientState } from "@/lib/client-state";
 import { readBest, writeBest } from "@/lib/scores";
 import { unlockSound } from "@/lib/sound";
-import type { MaxFactor, RoundSeconds } from "@/lib/settings";
+import type { AnswerMode, MaxFactor, RoundSeconds } from "@/lib/settings";
 import type { ThemeId } from "@/lib/theme";
 
 type Screen = "pick" | "den" | "play" | "results";
@@ -38,7 +38,9 @@ export function GameApp() {
   const activeScreen: Screen = screen ?? (client?.theme ? "den" : "pick");
   const theme = client?.theme ?? null;
   const best =
-    client?.theme && !client.blocked ? readBest(client.theme, client.maxFactor, client.seconds) : null;
+    client?.theme && !client.blocked
+      ? readBest(client.theme, client.maxFactor, client.seconds, client.answerMode)
+      : null;
 
   function refresh() {
     setRevision((value) => value + 1);
@@ -48,10 +50,16 @@ export function GameApp() {
     const current = readClientState();
     const previousBest =
       current?.theme && !current.blocked
-        ? readBest(current.theme, current.maxFactor, current.seconds)
+        ? readBest(current.theme, current.maxFactor, current.seconds, current.answerMode)
         : null;
     if (current?.theme && !current.blocked) {
-      const saved = writeBest(current.theme, current.maxFactor, current.seconds, result.correct);
+      const saved = writeBest(
+        current.theme,
+        current.maxFactor,
+        current.seconds,
+        current.answerMode,
+        result.correct,
+      );
       if (saved.blocked) {
         patchClientState({ blocked: true });
       }
@@ -78,6 +86,11 @@ export function GameApp() {
 
   function changeSeconds(seconds: RoundSeconds) {
     patchClientState({ seconds });
+    refresh();
+  }
+
+  function changeAnswerMode(answerMode: AnswerMode) {
+    patchClientState({ answerMode });
     refresh();
   }
 
@@ -110,12 +123,14 @@ export function GameApp() {
               theme={theme}
               maxFactor={client.maxFactor}
               seconds={client.seconds}
+              answerMode={client.answerMode}
               best={best}
               storageBlocked={client.blocked}
               muted={client.muted}
               onTheme={chooseTheme}
               onMaxFactor={changeMax}
               onSeconds={changeSeconds}
+              onAnswerMode={changeAnswerMode}
               onToggleMute={toggleMuted}
               onStart={startRound}
             />
@@ -126,6 +141,7 @@ export function GameApp() {
               theme={theme}
               maxFactor={client.maxFactor}
               seconds={client.seconds}
+              answerMode={client.answerMode}
               best={best}
               muted={client.muted}
               onToggleMute={toggleMuted}
